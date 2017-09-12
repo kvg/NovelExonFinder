@@ -123,23 +123,26 @@ public class NovelExonFinder {
             CortexKmer ck = new CortexKmer(madsKmer);
 
             if (!processedKmers.contains(ck)) {
-                List<CortexVertex> w = e.walk(madsKmer);
+                CortexRecord mr = cg.findRecord(ck);
 
-                boolean found = false;
-                for (CortexVertex v : w) {
-                    //if (!found && novelKmers.contains(v.getCk())) {
-                    if (!found && isNovel(v.getCr(), transcriptomeColor, sampleColor)) {
-                        found = true;
+                if (mr.getCoverage(sampleColor) > 0) {
+                    List<CortexVertex> w = e.walk(madsKmer);
+
+                    boolean found = false;
+                    for (CortexVertex v : w) {
+                        if (!found && isNovel(v.getCr(), transcriptomeColor, sampleColor)) {
+                            found = true;
+                        }
+
+                        processedKmers.add(v.getCk());
                     }
 
-                    processedKmers.add(v.getCk());
-                }
+                    if (found) {
+                        log.info("  found seed={} contig_length={} contig={}", madsKmer, w.size(), TraversalEngine.toContig(w));
 
-                if (found) {
-                    log.info("  found seed={} contig_length={} contig={}", madsKmer, w.size(), TraversalEngine.toContig(w));
-
-                    out.println(">" + madsKmer);
-                    out.println(TraversalEngine.toContig(w));
+                        out.println(">" + madsKmer);
+                        out.println(TraversalEngine.toContig(w));
+                    }
                 }
             }
 
