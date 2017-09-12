@@ -1,10 +1,21 @@
 package se.kth.warrenk;
 
+import htsjdk.samtools.reference.FastaSequenceFile;
+import htsjdk.samtools.reference.ReferenceSequence;
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.CommandLineParser;
+import org.apache.commons.cli.DefaultParser;
+import org.apache.commons.cli.Options;
 import org.jgrapht.Graph;
+import org.slf4j.Logger;
+import uk.ac.ox.well.cortexjdk.Main;
 import uk.ac.ox.well.cortexjdk.utils.io.cortex.graph.CortexGraph;
 import uk.ac.ox.well.cortexjdk.utils.io.cortex.graph.CortexKmer;
 import uk.ac.ox.well.cortexjdk.utils.io.cortex.graph.CortexRecord;
 import uk.ac.ox.well.cortexjdk.utils.io.cortex.links.CortexLinks;
+import uk.ac.ox.well.cortexjdk.utils.progress.ProgressMeter;
+import uk.ac.ox.well.cortexjdk.utils.progress.ProgressMeterFactory;
+import uk.ac.ox.well.cortexjdk.utils.sequence.SequenceUtils;
 import uk.ac.ox.well.cortexjdk.utils.stoppingrules.ContigStopper;
 import uk.ac.ox.well.cortexjdk.utils.traversal.CortexEdge;
 import uk.ac.ox.well.cortexjdk.utils.traversal.CortexVertex;
@@ -18,91 +29,114 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 
-import static uk.ac.ox.well.cortexjdk.utils.traversal.TraversalEngineConfiguration.GraphCombinationOperator.OR;
-import static uk.ac.ox.well.cortexjdk.utils.traversal.TraversalEngineConfiguration.TraversalDirection.BOTH;
-
 /**
  * Created by kiran on 11/09/2017.
  */
 public class NovelExonFinder {
     public static void main(String[] args) throws Exception {
-        if (args.length != 4) { throw new RuntimeException("Wrong number of args"); }
+        // Parse command line
+        Options o = new Options();
+        o.addOption("graph",                "The joined transcriptome graph");
+        o.addOption("seeds",                "The FASTA file representing seed sequences");
+        o.addOption("transcriptomeName",    "The sample name assigned to the canonical transcriptome in the graph");
+        o.addOption("transcriptomeLinksDb", "The linksdb file for the canonical transcriptome");
+        o.addOption("sampleName",           "The sample name assigned to the sample of interest in the graph");
+        o.addOption("sampleLinksDb",        "The linksdb file for the sample");
+        o.addOption("output",               "The output file");
 
-        String graphFile = args[0];
-        String refLinks = args[1];
-        String altLinks = args[2];
-        String outFile = args[3];
+        CommandLineParser clp = new DefaultParser();
+        CommandLine cl = clp.parse(o, args);
 
-        int transcriptomeColor = 0;
-        int madsColor = 2;
+        CortexGraph cg = new CortexGraph(cl.getOptionValue("graph"));
+        CortexLinks rl = new CortexLinks(cl.getOptionValue("transcriptomeLinksDb"));
+        CortexLinks al = new CortexLinks(cl.getOptionValue("sampleLinksDb"));
+        FastaSequenceFile mads = new FastaSequenceFile(new File(cl.getOptionValue("seeds")), true);
+        PrintStream out = new PrintStream(new File(cl.getOptionValue("output")));
 
-        CortexGraph cg = new CortexGraph(graphFile);
-        CortexLinks rl = new CortexLinks(refLinks);
-        CortexLinks al = new CortexLinks(altLinks);
+        int transcriptomeColor = cg.getColorForSampleName(cl.getOptionValue("transcriptomeName"));
+        int sampleColor = cg.getColorForSampleName(cl.getOptionValue("sampleName"));
 
-        PrintStream out = new PrintStream(new File(outFile));
+        Logger log = Main.getLogger();
 
-        Set<CortexRecord> novelKmers = new HashSet<>();
-
-        System.err.println("Processing kmers...");
-        for (CortexRecord cr : cg) {
-            if (isNovel(cr, transcriptomeColor, madsColor)) {
-                novelKmers.add(cr);
+        // Loads mads sequences
+        Set<String> madsKmers = new HashSet<>();
+        ReferenceSequence rseq;
+        int numMadsSeqs = 0;
+        while ((rseq = mads.nextSequence()) != null) {
+            String seq = rseq.getBaseString();
+            for (int i = 0; i <= rseq.length() - cg.getKmerSize(); i++) {
+                String sk = seq.substring(i, i + cg.getKmerSize());
+                madsKmers.add(sk);
             }
-        }
-        System.err.println("\t" + novelKmers.size() + " novel kmers found");
 
+            numMadsSeqs++;
+        }
+        log.info("Loaded {} mads sequences into {} kmers", numMadsSeqs, madsKmers.size());
+
+        // Look for novel kmers
+        Set<CortexKmer> novelKmers = new HashSet<>();
+
+        ProgressMeter pm = new ProgressMeterFactory()
+                .header("Processing kmers")
+                .message("kmers processed")
+                .maxRecord(cg.getNumRecords())
+                .make(log);
+
+        for (CortexRecord cr : cg) {
+            if (isNovel(cr, transcriptomeColor, sampleColor)) {
+                novelKmers.add(cr.getCortexKmer());
+            }
+
+            pm.update();
+        }
+
+        log.info("  found {} novel kmers", novelKmers.size());
+
+        // Traverse contigs at novel kmers
         TraversalEngine e = new TraversalEngineFactory()
-                .joiningColors(madsColor)
+                .traversalColor(sampleColor)
                 .graph(cg)
-                .traversalDirection(BOTH)
-                .combinationOperator(OR)
-                .stoppingRule(JoiningStopper.class)
                 .links(rl, al)
                 .make();
 
+        pm = new ProgressMeterFactory()
+                .header("Examining mads kmers")
+                .message("novel mads examined")
+                .maxRecord(madsKmers.size())
+                .make(log);
+
         Set<CortexKmer> processedKmers = new TreeSet<>();
-        for (CortexRecord nk : novelKmers) {
-            if (!processedKmers.contains(nk.getCortexKmer())) {
-                for (int c = 0; c < nk.getNumColors(); c++) {
-                    if (c != transcriptomeColor && c != madsColor && nk.getCoverage(c) > 0) {
-                        e.getConfiguration().setTraversalColor(c);
+        for (String madsKmer : madsKmers) {
+            CortexKmer ck = new CortexKmer(madsKmer);
 
-                        List<CortexVertex> w = e.walk(nk.getKmerAsString());
+            if (!processedKmers.contains(ck)) {
+                List<CortexVertex> w = e.walk(madsKmer);
 
-                        boolean touchedMadsGene = false;
-                        for (CortexVertex cv : w) {
-                            if (cv.getCr().getCoverage(madsColor) > 0) {
-                                touchedMadsGene = true;
-                            }
-
-                            processedKmers.add(cv.getCk());
-                        }
-
-                        if (touchedMadsGene) {
-                            String contig = TraversalEngine.toContig(w);
-
-                            out.println(">" + nk.getKmerAsString());
-                            out.println(contig);
-                        }
+                boolean found = false;
+                for (CortexVertex v : w) {
+                    if (!found && novelKmers.contains(v.getCk())) {
+                        found = true;
                     }
+
+                    processedKmers.add(v.getCk());
+                }
+
+                if (found) {
+                    log.info("  found seed={} contig_length={} contig={}", madsKmer, w.size(), TraversalEngine.toContig(w));
+
+                    out.println(">" + madsKmer);
+                    out.println(TraversalEngine.toContig(w));
                 }
             }
+
+            pm.update();
         }
     }
 
-    private static boolean isNovel(CortexRecord cr, int transcriptomeColor, int madsColor) {
+    private static boolean isNovel(CortexRecord cr, int transcriptomeColor, int sampleColor) {
         boolean transcriptomeHasCoverage = cr.getCoverage(transcriptomeColor) > 0;
-        boolean madsboxHasCoverage = cr.getCoverage(madsColor) > 0;
+        boolean sampleHasCoverage = cr.getCoverage(sampleColor) > 0;
 
-        if (!transcriptomeHasCoverage && !madsboxHasCoverage) {
-            for (int c = 0; c < cr.getNumColors(); c++) {
-                if (c != transcriptomeColor && c != madsColor && cr.getCoverage(c) > 0) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
+        return !transcriptomeHasCoverage && sampleHasCoverage;
     }
 }
