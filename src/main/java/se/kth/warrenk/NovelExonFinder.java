@@ -11,6 +11,8 @@ import uk.ac.ox.well.cortexjdk.utils.traversal.CortexVertex;
 import uk.ac.ox.well.cortexjdk.utils.traversal.TraversalEngine;
 import uk.ac.ox.well.cortexjdk.utils.traversal.TraversalEngineFactory;
 
+import java.io.File;
+import java.io.PrintStream;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -24,11 +26,12 @@ import static uk.ac.ox.well.cortexjdk.utils.traversal.TraversalEngineConfigurati
  */
 public class NovelExonFinder {
     public static void main(String[] args) throws Exception {
-        if (args.length != 3) { throw new RuntimeException("Wrong number of args"); }
+        if (args.length != 4) { throw new RuntimeException("Wrong number of args"); }
 
         String graphFile = args[0];
         String refLinks = args[1];
         String altLinks = args[2];
+        String outFile = args[3];
 
         int transcriptomeColor = 0;
         int madsColor = 2;
@@ -37,15 +40,17 @@ public class NovelExonFinder {
         CortexLinks rl = new CortexLinks(refLinks);
         CortexLinks al = new CortexLinks(altLinks);
 
+        PrintStream out = new PrintStream(new File(outFile));
+
         Set<CortexRecord> novelKmers = new HashSet<>();
 
-        System.out.println("Processing kmers...");
+        System.err.println("Processing kmers...");
         for (CortexRecord cr : cg) {
             if (isNovel(cr, transcriptomeColor, madsColor)) {
                 novelKmers.add(cr);
             }
         }
-        System.out.println("\t" + novelKmers.size() + " novel kmers found");
+        System.err.println("\t" + novelKmers.size() + " novel kmers found");
 
         TraversalEngine e = new TraversalEngineFactory()
                 .joiningColors(madsColor)
@@ -77,8 +82,8 @@ public class NovelExonFinder {
                         if (touchedMadsGene) {
                             String contig = TraversalEngine.toContig(w);
 
-                            System.out.println(">" + nk.getKmerAsString());
-                            System.out.println(contig);
+                            out.println(">" + nk.getKmerAsString());
+                            out.println(contig);
                         }
                     }
                 }
