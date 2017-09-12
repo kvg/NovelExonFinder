@@ -85,6 +85,7 @@ public class NovelExonFinder {
         log.info("Loaded {} mads sequences into {} kmers", numMadsSeqs, madsKmers.size());
 
         // Look for novel kmers
+        /*
         Set<CortexKmer> novelKmers = new HashSet<>();
 
         ProgressMeter pm = new ProgressMeterFactory()
@@ -102,6 +103,7 @@ public class NovelExonFinder {
         }
 
         log.info("  found {} novel kmers", novelKmers.size());
+        */
 
         // Traverse contigs at novel kmers
         TraversalEngine e = new TraversalEngineFactory()
@@ -110,7 +112,7 @@ public class NovelExonFinder {
                 .links(rl, al)
                 .make();
 
-        pm = new ProgressMeterFactory()
+        ProgressMeter pm = new ProgressMeterFactory()
                 .header("Examining mads kmers")
                 .message("novel mads examined")
                 .maxRecord(madsKmers.size())
@@ -125,7 +127,8 @@ public class NovelExonFinder {
 
                 boolean found = false;
                 for (CortexVertex v : w) {
-                    if (!found && novelKmers.contains(v.getCk())) {
+                    //if (!found && novelKmers.contains(v.getCk())) {
+                    if (!found && isNovel(v.getCr(), transcriptomeColor, sampleColor)) {
                         found = true;
                     }
 
