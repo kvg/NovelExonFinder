@@ -56,32 +56,30 @@ public class NovelExonFinder {
                 .links(rl, al)
                 .make();
 
-        Set<CortexKmer> seen = new TreeSet<>();
+        Set<CortexKmer> processedKmers = new TreeSet<>();
         for (CortexRecord nk : novelKmers) {
-            if (!seen.contains(nk.getCortexKmer())) {
+            if (!processedKmers.contains(nk.getCortexKmer())) {
                 for (int c = 0; c < nk.getNumColors(); c++) {
                     if (c != transcriptomeColor && c != madsColor && nk.getCoverage(c) > 0) {
                         e.getConfiguration().setTraversalColor(c);
 
-                        //List<CortexVertex> w = e.walk(nk.getKmerAsString());
-                        Graph<CortexVertex, CortexEdge> g = e.dfs(nk.getKmerAsString());
+                        List<CortexVertex> w = e.walk(nk.getKmerAsString());
 
-                        if (g != null && g.vertexSet().size() > 0) {
-                            System.out.println(">" + nk.getKmerAsString());
-
-                            for (CortexVertex cv : g.vertexSet()) {
-                                seen.add(cv.getCk());
+                        boolean touchedMadsGene = false;
+                        for (CortexVertex cv : w) {
+                            if (cv.getCr().getCoverage(madsColor) > 0) {
+                                touchedMadsGene = true;
                             }
+
+                            processedKmers.add(cv.getCk());
                         }
 
+                        if (touchedMadsGene) {
+                            String contig = TraversalEngine.toContig(w);
 
-                        /*
-                        String contig = TraversalEngine.toContig(w);
-
-
-                        System.out.println(">" + nk.getKmerAsString());
-                        System.out.println(contig);
-                        */
+                            System.out.println(">" + nk.getKmerAsString());
+                            System.out.println(contig);
+                        }
                     }
                 }
             }
@@ -90,8 +88,9 @@ public class NovelExonFinder {
 
     private static boolean isNovel(CortexRecord cr, int transcriptomeColor, int madsColor) {
         boolean transcriptomeHasCoverage = cr.getCoverage(transcriptomeColor) > 0;
+        boolean madsboxHasCoverage = cr.getCoverage(madsColor) > 0;
 
-        if (!transcriptomeHasCoverage) {
+        if (!transcriptomeHasCoverage && !madsboxHasCoverage) {
             for (int c = 0; c < cr.getNumColors(); c++) {
                 if (c != transcriptomeColor && c != madsColor && cr.getCoverage(c) > 0) {
                     return true;
