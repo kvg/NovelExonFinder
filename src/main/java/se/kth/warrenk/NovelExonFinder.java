@@ -2,10 +2,7 @@ package se.kth.warrenk;
 
 import htsjdk.samtools.reference.FastaSequenceFile;
 import htsjdk.samtools.reference.ReferenceSequence;
-import org.apache.commons.cli.CommandLine;
-import org.apache.commons.cli.CommandLineParser;
-import org.apache.commons.cli.DefaultParser;
-import org.apache.commons.cli.Options;
+import org.apache.commons.cli.*;
 import org.jgrapht.Graph;
 import org.slf4j.Logger;
 import uk.ac.ox.well.cortexjdk.Main;
@@ -46,6 +43,20 @@ public class NovelExonFinder {
 
         CommandLineParser clp = new DefaultParser();
         CommandLine cl = clp.parse(o, args);
+
+        if (!cl.hasOption("graph") ||
+            !cl.hasOption("transcriptomeLinksDb") ||
+            !cl.hasOption("sampleLinksDb") ||
+            !cl.hasOption("seeds") ||
+            !cl.hasOption("output") ||
+            !cl.hasOption("transcriptomeName") ||
+            !cl.hasOption("sampleName")) {
+
+            HelpFormatter formatter = new HelpFormatter();
+            formatter.printHelp("novelexonfinder", o);
+
+            System.exit(1);
+        }
 
         CortexGraph cg = new CortexGraph(cl.getOptionValue("graph"));
         CortexLinks rl = new CortexLinks(cl.getOptionValue("transcriptomeLinksDb"));
