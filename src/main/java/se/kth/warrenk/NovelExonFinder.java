@@ -33,13 +33,13 @@ public class NovelExonFinder {
     public static void main(String[] args) throws Exception {
         // Parse command line
         Options o = new Options();
-        o.addOption("graph",                "The joined transcriptome graph");
-        o.addOption("seeds",                "The FASTA file representing seed sequences");
-        o.addOption("transcriptomeName",    "The sample name assigned to the canonical transcriptome in the graph");
-        o.addOption("transcriptomeLinksDb", "The linksdb file for the canonical transcriptome");
-        o.addOption("sampleName",           "The sample name assigned to the sample of interest in the graph");
-        o.addOption("sampleLinksDb",        "The linksdb file for the sample");
-        o.addOption("output",               "The output file");
+        o.addOption("g",  "graph",                true, "The joined transcriptome graph");
+        o.addOption("s",  "seeds",                true, "The FASTA file representing seed sequences");
+        o.addOption("tn", "transcriptomeName",    true, "The sample name assigned to the canonical transcriptome in the graph");
+        o.addOption("tl", "transcriptomeLinksDb", true, "The linksdb file for the canonical transcriptome");
+        o.addOption("sn", "sampleName",           true, "The sample name assigned to the sample of interest in the graph");
+        o.addOption("sl", "sampleLinksDb",        true, "The linksdb file for the sample");
+        o.addOption("o",  "output",               true, "The output file");
 
         CommandLineParser clp = new DefaultParser();
         CommandLine cl = clp.parse(o, args);
@@ -53,7 +53,7 @@ public class NovelExonFinder {
             !cl.hasOption("sampleName")) {
 
             HelpFormatter formatter = new HelpFormatter();
-            formatter.printHelp("novelexonfinder", o);
+            formatter.printHelp("java -jar novelexonfinder.jar", o);
 
             System.exit(1);
         }
