@@ -125,7 +125,7 @@ public class NovelExonFinder {
             if (!processedKmers.contains(ck)) {
                 CortexRecord mr = cg.findRecord(ck);
 
-                if (mr.getCoverage(sampleColor) > 0) {
+                if (mr != null && mr.getCoverage(sampleColor) > 0) {
                     List<CortexVertex> w = e.walk(madsKmer);
 
                     boolean found = false;
