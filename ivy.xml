@@ -1,0 +1,17 @@
+<ivy-module version="1.0">
+    <info organisation="se.kth.warrenk" module="novelexonfinder"/>
+
+    <configurations defaultconfmapping="test->default">
+        <conf name="default" description="the core dependencies for NovelExonFinder"/>
+    </configurations>
+
+    <dependencies defaultconf="default">
+        <!-- Dependencies that can be satisifed with local repository -->
+        <dependency org="uk.ac.ox.well.cortexjdk" name="cortexjdk" rev="0.1" />
+
+        <!-- Exclude dependencies on sun libraries where the downloads aren't available but included in the jvm -->
+        <exclude org="javax.servlet" />
+        <exclude org="javax.jms" />
+        <exclude org="com.sun.*" />
+    </dependencies>
+</ivy-module>

@@ -1,0 +1,219 @@
+<project name="novelexonfinder" default="dist" xmlns:ivy="antlib:org.apache.ivy.ant">
+    <description>Compile and distribute NovelExonFinder</description>
+
+    <property name="src.dir" value="src/main/java" />
+    <property name="lib.dir" value="lib" />
+    <property name="build.dir" value="build" />
+    <property name="jars.dir" value="build/jars" />
+    <property name="staging.dir" value="build/staging" />
+    <property name="dist.dir" value="dist" />
+    <property name="testng.dir" value="test" />
+    <property name="doc.dir" value="doc" />
+    <property name="out.dir" value="out" />
+    <property name="report.dir" value="report" />
+    <property name="release.dir" value="release" />
+    <property name="testdata.dir" value="testdata" />
+
+    <property name="ivy.install.version" value="2.3.0-rc1" />
+    <property name="ivy.jar.dir" value="${lib.dir}" />
+    <property name="ivy.jar.file" value="${ivy.jar.dir}/ivy.jar" />
+    <property name="ivy.settings.dir" value="settings"/>
+    <property file="${ivy.settings.dir}/ivysettings.properties"/>
+
+    <!-- If we don't have ivy already, download and install it -->
+    <target name="install-ivy" unless="skip.download" description="install ivy">
+        <mkdir dir="${ivy.jar.dir}"/>
+
+        <get src="http://repo1.maven.org/maven2/org/apache/ivy/ivy/${ivy.install.version}/ivy-${ivy.install.version}.jar"
+             dest="${ivy.jar.file}" usetimestamp="true"/>
+
+        <path id="ivy.lib.path">
+            <fileset dir="${ivy.jar.dir}" includes="*.jar"/>
+        </path>
+
+        <taskdef resource="org/apache/ivy/ant/antlib.xml" uri="antlib:org.apache.ivy.ant" classpathref="ivy.lib.path"/>
+
+        <ivy:settings file="${ivy.settings.dir}/ivysettings.xml"/>
+    </target>    
+
+    <!-- Configure ivy for dependency resolution -->
+    <target name="resolve" depends="install-ivy" unless="skip.download" description="locate and download library dependencies">
+        <property name="ivy.conf" value="default"/>
+
+        <ivy:retrieve file="ivy.xml" conf="${ivy.conf}" />
+    </target>
+
+    <!-- Set things up (directories, file copies, etc.) -->
+    <target name="init" depends="resolve">
+        <tstamp>
+            <format property="build.timestamp" pattern="yyyy/MM/dd HH:mm:ss"/>
+        </tstamp>
+
+        <mkdir dir="${build.dir}" />
+        <mkdir dir="${jars.dir}" />
+        <mkdir dir="${dist.dir}" />
+        <mkdir dir="${doc.dir}" />
+
+        <copy todir="${jars.dir}">
+            <fileset dir="${lib.dir}" includes="*.jar"/>
+        </copy>
+
+        <pathconvert property="jar.classpath" pathsep=" ">
+            <flattenmapper/>
+            <fileset dir="${jars.dir}" includes="*.jar"/>
+        </pathconvert>
+    </target>
+
+    <!-- Compile everything into individual jar files -->
+    <target name="compile" depends="init,properties" description="compile distribution">
+        <javac srcdir="${src.dir}" destdir="${build.dir}" includeantruntime="false" debug="on" debuglevel="lines,vars,source">
+            <classpath>  
+                <fileset dir="${lib.dir}">  
+                    <include name="**/*.jar" />  
+                </fileset>
+            </classpath>
+        </javac>
+
+        <jar jarfile="${jars.dir}/novelexonfinder.jar">
+            <fileset dir="${build.dir}">
+                <include name="**/*.class" />
+                <include name="**/*.properties" />
+            </fileset>
+
+            <manifest>
+                <attribute name="Class-Path" value="${jar.classpath}"/>
+                <attribute name="Main-Class" value="se.kth.warrenk.NovelExonFinder" />
+            </manifest>
+        </jar>
+    </target>
+
+    <!-- Prepare to make a jar file with all the NovelExonFinder code and dependencies -->
+    <target name="stage" description="stage files for distribution">
+        <mkdir dir="${staging.dir}" />
+
+        <unjar dest="${staging.dir}" overwrite="false">
+            <fileset dir="${jars.dir}"/>
+        </unjar>
+    </target>
+
+    <!-- Create a single executable jar with all of the NovelExonFinder and dependency code wrapped up -->
+    <target name="dist" depends="tidy,compile,stage" description="bundle up an executable for distribution">
+        <mkdir dir="${dist.dir}" />
+
+        <jar jarfile="${dist.dir}/novelexonfinder.jar">
+            <fileset dir="${build.dir}">
+                <include name="**/*.properties" />
+                <include name="**/*.R" />
+                <include name="**/*.html" />
+                <include name="**/*.js" />
+                <include name="**/*.css" />
+            </fileset>
+
+            <fileset dir="${staging.dir}">
+                <include name="**/*.class" />
+            </fileset>
+
+            <manifest>
+                <attribute name="Main-Class" value="se.kth.warrenk.NovelExonFinder" />
+            </manifest>
+        </jar>
+    </target>
+
+    <!-- Unit tests -->
+    <target name="test" depends="compile">
+        <mkdir dir="${testng.dir}" />
+
+        <taskdef name="testng" classname="org.testng.TestNGAntTask" classpath="${jars.dir}/testng-6.9.10.jar" />
+ 
+        <testng outputDir="${testng.dir}" haltOnFailure="false" verbose="2">
+            <classpath>
+                <fileset dir="${jars.dir}">  
+                    <include name="*.jar" />  
+                </fileset>
+            </classpath>
+            <classfileset dir="${build.dir}/se.kth.warrenk/" includes="**/*.class" />
+        </testng>
+    </target>
+
+    <!-- Update the build properties file with the git commit ID, commit date, and build date -->
+    <target name="properties" depends="git.version,git.version.long,git.date,build.date">
+        <propertyfile file="${build.dir}/build.properties">
+            <entry key="major.version" value="0"/>
+            <entry key="minor.version" value="1"/>
+            <entry key="git.version" value="${git.version.output}"/>
+            <entry key="git.version.long" value="${git.version.long.output}"/>
+            <entry key="git.date" value="${git.date.output}"/>
+            <entry key="build.date" value="${build.date.output}"/>
+        </propertyfile>
+    </target>
+
+    <!-- Get a version number for the executable -->
+    <target name="git.version">
+        <exec executable="git" outputproperty="git.version.output" resultproperty="git.version.exit.value" failonerror="false">
+            <arg line="rev-parse --short=4 HEAD" />
+        </exec>
+        <condition property="git.version.succeeded">
+            <equals arg1="${git.version.exit.value}" arg2="0" />
+        </condition>
+        <echo message="${git.version.output}" />
+    </target>
+
+    <!-- Get a long version number for the executable -->
+    <target name="git.version.long">
+        <exec executable="git" outputproperty="git.version.long.output" resultproperty="git.version.long.exit.value" failonerror="false">
+            <arg line="rev-parse HEAD" />
+        </exec>
+        <condition property="git.version.long.succeeded">
+            <equals arg1="${git.version.long.exit.value}" arg2="0" />
+        </condition>
+        <echo message="${git.version.long.output}" />
+    </target>
+
+    <!-- Get a most recent commit date for the executable -->
+    <target name="git.date">
+        <exec executable="git" outputproperty="git.date.output" resultproperty="git.date.exit.value" failonerror="false">
+            <arg line="show -s --format='%ci' HEAD" />
+        </exec>
+        <condition property="git.date.succeeded">
+            <equals arg1="${git.date.exit.value}" arg2="0" />
+        </condition>
+        <echo message="${git.date.output}" />
+    </target>
+
+    <!-- Get a compilation date for the executable -->
+    <target name="build.date">
+        <tstamp>
+            <format property="build.date.output" pattern="yyyy-MM-dd HH:mm:ss Z" />
+        </tstamp>
+        <echo message="${build.date.output}" />
+    </target>
+
+    <!-- Make a fully tested release jar -->
+    <target name="release" depends="clean,test,git.version,dist">
+        <mkdir dir="${release.dir}" />
+
+        <copy file="${dist.dir}/novelexonfinder.jar" tofile="${release.dir}/novelexonfinder-${git.version.output}.jar" />
+    </target>
+
+    <!-- Tidy a little bit up -->
+    <target name="tidy" description="tidy the project up a little bit">
+        <delete includeemptydirs="true" verbose="false" quiet="true">
+            <fileset dir="${staging.dir}" />
+            <fileset dir="${dist.dir}" />
+        </delete>
+    </target>
+
+    <!-- Clean everything up -->
+    <target name="clean" description="clean the project">
+        <delete includeemptydirs="true" verbose="false" quiet="true">
+            <fileset dir="${lib.dir}" />
+            <fileset dir="${build.dir}" />
+            <fileset dir="${staging.dir}" />
+            <fileset dir="${dist.dir}" />
+            <fileset dir="${testng.dir}" />
+            <fileset dir="${out.dir}" />
+            <fileset dir="${report.dir}" />
+            <fileset dir="${release.dir}" />
+        </delete>
+    </target>
+</project>
