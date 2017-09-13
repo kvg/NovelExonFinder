@@ -1,0 +1,3 @@
+[submodule "settings/repository/CortexJDK"]
+	path = settings/repository/CortexJDK
+	url = https://github.com/mcveanlab/CortexJDK.git
