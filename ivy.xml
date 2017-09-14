@@ -7,7 +7,7 @@
 
     <dependencies defaultconf="default">
         <!-- Dependencies that can be satisifed with local repository -->
-        <dependency org="uk.ac.ox.well.cortexjdk" name="cortexjdk" rev="0.1" />
+        <dependency org="uk.ac.ox.well.cortexjdk" name="cortexjdk" rev="0.2" />
 
         <!-- Exclude dependencies on sun libraries where the downloads aren't available but included in the jvm -->
         <exclude org="javax.servlet" />
